@@ -35,7 +35,7 @@ export default function Intake() {
       const res = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_base64: dataUrl.split(",")[1] }),
+        body: JSON.stringify({ image_base64: dataUrl.split(",")[1], mime: file.type || "image/png" }),
       });
       if (!res.ok) throw new Error(`extract → ${res.status}`);
       setResult(await res.json());
