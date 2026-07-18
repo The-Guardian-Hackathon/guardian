@@ -25,7 +25,7 @@ function ev(t: Trip, phase: Phase, message: string): Trip {
 }
 
 function patchLeg(t: Trip, leg: LegName, patch: Partial<Trip["legs"][LegName]>): Trip {
-  const prev = t.legs[leg];
+  const prev = t.legs[leg] ?? { status: "draft" as const, details: {}, price: null };
   return {
     ...t,
     legs: {
@@ -116,9 +116,27 @@ const DISRUPT_SCRIPT: Step[] = [
 // ---- The hook ----
 
 export function useTrip(tripId: string) {
-  const [trip, setTrip] = useState<Trip | null>(USE_FIXTURES ? FIXTURE_TRIP : null);
+  const [trip, setTrip] = useState<Trip | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Fixture mode: the canned demo trip, or a typed-intent trip stashed by the
+  // intake page in sessionStorage.
+  useEffect(() => {
+    if (!USE_FIXTURES) return;
+    if (tripId === "intent") {
+      try {
+        const raw = sessionStorage.getItem("guardian-intent-trip");
+        if (raw) {
+          setTrip(JSON.parse(raw) as Trip);
+          return;
+        }
+      } catch {
+        // fall through to the demo trip
+      }
+    }
+    setTrip(FIXTURE_TRIP);
+  }, [tripId]);
 
   // Real mode: poll.
   useEffect(() => {

@@ -1,5 +1,10 @@
 export function fmtTime(iso: unknown): string {
   if (typeof iso !== "string") return "—";
+  // Date-only (a plan, not a booking): show the date, not a fake midnight time.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
   // Show the time in the timezone baked into the ISO string (trip-local),
   // not the viewer's — a JFK 8:05 AM departure must not render as 5:05 AM
   // on a Pacific-time laptop.

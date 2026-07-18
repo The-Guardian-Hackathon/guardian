@@ -34,6 +34,23 @@ const TRIP_SCHEMA = {
   },
 };
 
+// For free-text intent ("visiting family in Kansas over Thanksgiving") — nothing
+// is booked yet, so we extract the plan, not confirmations.
+const INTENT_SCHEMA = {
+  type: "object",
+  properties: {
+    traveler_name: { type: "string", description: "Traveler's name if mentioned" },
+    origin: { type: "string", description: "Origin city or airport if mentioned" },
+    destination: { type: "string", description: "Destination city, region, or airport" },
+    start_iso: { type: "string", description: "Trip start date in ISO 8601. Resolve relative references (e.g. 'Thanksgiving break' is late November of the current or upcoming year 2026)" },
+    end_iso: { type: "string", description: "Trip end date in ISO 8601 if inferable" },
+    party_size: { type: "number", description: "Number of travelers, default 1" },
+    occasion: { type: "string", description: "Why they are traveling, e.g. visiting family, wedding, conference" },
+    budget_note: { type: "string", description: "Any price sensitivity mentioned, e.g. cheapest flights" },
+    lodging_needed: { type: "string", description: "'no' if they will stay with family/friends or lodging is clearly covered, 'yes' if they will need a hotel, 'unknown' otherwise" },
+  },
+};
+
 const MOCK_EXTRACT: ExtractResult = {
   traveler: { name: "Khushi Chandra", phone: "+1 555 010 7788" },
   draft_legs: {
@@ -78,10 +95,14 @@ async function adeParse(imageBase64: string, mime: string, apiKey: string): Prom
   return data.markdown as string;
 }
 
-async function adeExtract(markdown: string, apiKey: string): Promise<Record<string, unknown>> {
+async function adeExtract(
+  markdown: string,
+  apiKey: string,
+  schema: object = TRIP_SCHEMA,
+): Promise<Record<string, unknown>> {
   const form = new FormData();
   form.append("markdown", markdown);
-  form.append("schema", JSON.stringify(TRIP_SCHEMA));
+  form.append("schema", JSON.stringify(schema));
   form.append("model", "extract-latest");
 
   const res = await fetch(`${ADE_BASE}/extract`, {
@@ -149,12 +170,95 @@ function toResult(x: Record<string, unknown>): ExtractResult {
   return result;
 }
 
+// Free-text intent -> draft legs with reasons. Nothing here is booked.
+function intentToResult(x: Record<string, unknown>, rawText: string): ExtractResult {
+  const s = (k: string) => (typeof x[k] === "string" && (x[k] as string).trim() ? (x[k] as string).trim() : undefined);
+  const n = (k: string) => (typeof x[k] === "number" ? (x[k] as number) : undefined);
+
+  const result: ExtractResult = {
+    traveler: { name: s("traveler_name") ?? "Traveler", phone: "" },
+    draft_legs: {},
+  };
+  const dest = s("destination");
+  if (!dest) return result;
+
+  const occasion = s("occasion");
+  const budget = s("budget_note");
+  const why = [
+    `You said: "${rawText.length > 110 ? rawText.slice(0, 110) + "…" : rawText}"`,
+    budget ? `Optimizing for ${budget.toLowerCase()}.` : undefined,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  result.draft_legs.flight = {
+    details: {
+      origin: s("origin") ?? "JFK (home)",
+      dest,
+      depart_iso: s("start_iso"),
+      arrive_iso: undefined,
+      reason: why,
+    },
+    price: null,
+  };
+  if (s("lodging_needed") === "yes") {
+    result.draft_legs.hotel = {
+      details: {
+        name: `Stay in ${dest}`,
+        checkin_iso: s("start_iso"),
+        reason: "You'll need a place to stay — no lodging mentioned.",
+      },
+    };
+  } else if (occasion) {
+    result.draft_legs.flight.details.note = `No stay drafted — ${occasion.toLowerCase()}.`;
+  }
+  const party = n("party_size");
+  if (party && party > 1) result.draft_legs.flight.details.party_size = party;
+  return result;
+}
+
+const MOCK_INTENT: ExtractResult = {
+  traveler: { name: "Khushi Chandra", phone: "" },
+  draft_legs: {
+    flight: {
+      details: {
+        origin: "JFK (home)",
+        dest: "Kansas City (MCI)",
+        depart_iso: "2026-11-25T09:00:00-05:00",
+        reason: "You said you're visiting family in Kansas over Thanksgiving. Optimizing for cheapest flights.",
+        note: "No stay drafted — visiting family.",
+      },
+      price: null,
+    },
+  },
+};
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const image: string | undefined = body.image_base64;
+  const text: string | undefined = typeof body.text === "string" ? body.text.trim() : undefined;
   const mime: string = body.mime ?? "image/png";
   const apiKey = process.env.LANDINGAI_API_KEY;
 
+  // Path 1: typed intent — extract the plan straight from the text.
+  if (text && !image) {
+    if (apiKey) {
+      try {
+        const extraction = await adeExtract(`Traveler note (today is 2026-07-18): ${text}`, apiKey, INTENT_SCHEMA);
+        const result = intentToResult(extraction, text);
+        if (Object.keys(result.draft_legs).length > 0) {
+          return NextResponse.json({ mocked: false, intent: true, ...result });
+        }
+        console.error("Intent extraction found no destination:", extraction);
+      } catch (e) {
+        console.error("LandingAI intent extract failed, falling back to mock:", e);
+      }
+    }
+    await new Promise((r) => setTimeout(r, 800));
+    return NextResponse.json({ mocked: true, intent: true, ...MOCK_INTENT });
+  }
+
+  // Path 2: uploaded document — parse to markdown, then extract confirmations.
   if (image && apiKey) {
     try {
       const markdown = await adeParse(image, mime, apiKey);

@@ -19,7 +19,13 @@ function legSummary(name: string, leg: { details: Record<string, unknown> }): st
   const d = leg.details;
   switch (name) {
     case "flight":
-      return `${d.carrier ?? ""} ${d.flight_no ?? ""} · ${d.origin} → ${d.dest} · departs ${fmtTime(d.depart_iso)}`;
+      return [
+        [d.carrier, d.flight_no].filter(Boolean).join(" "),
+        `${d.origin} → ${d.dest}`,
+        d.depart_iso ? `departs ${fmtTime(d.depart_iso)}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
     case "dinner":
       return `${d.restaurant} · ${fmtTime(d.time_iso)} · party of ${d.party_size}`;
     case "hotel":
@@ -36,10 +42,33 @@ export default function Intake() {
   const [preview, setPreview] = useState<string | null>(null);
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [sourceNote, setSourceNote] = useState<string | null>(null);
+
+  const handleText = useCallback(async (text: string) => {
+    setStage("reading");
+    setError(null);
+    setPreview(null);
+    setSourceNote(text);
+    try {
+      const res = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error(`extract → ${res.status}`);
+      setResult(await res.json());
+      setStage("extracted");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "extraction failed");
+      setStage("idle");
+    }
+  }, []);
 
   const handleFile = useCallback(async (file: File) => {
     setStage("reading");
     setError(null);
+    setSourceNote(null);
     const dataUrl: string = await new Promise((resolve, reject) => {
       const r = new FileReader();
       r.onload = () => resolve(r.result as string);
@@ -66,6 +95,30 @@ export default function Intake() {
     if (!result) return;
     setStage("creating");
     if (USE_FIXTURES) {
+      // Typed intent gets its own drafted trip so the dashboard matches what
+      // the user actually said, instead of the canned SF demo.
+      if (sourceNote) {
+        const trip = {
+          trip_id: "intent",
+          traveler: result.traveler,
+          legs: Object.fromEntries(
+            Object.entries(result.draft_legs).map(([k, v]) => [
+              k,
+              { status: "draft", price: v.price ?? null, details: v.details },
+            ]),
+          ),
+          events: [
+            {
+              timestamp: new Date().toISOString(),
+              phase: "listen",
+              message: `Heard: "${sourceNote.length > 90 ? sourceNote.slice(0, 90) + "…" : sourceNote}" — drafted the trip.`,
+            },
+          ],
+        };
+        sessionStorage.setItem("guardian-intent-trip", JSON.stringify(trip));
+        router.push("/trip/intent");
+        return;
+      }
       router.push("/trip/demo");
       return;
     }
@@ -82,7 +135,7 @@ export default function Intake() {
       setError(e instanceof Error ? e.message : "backend unreachable");
       setStage("extracted");
     }
-  }, [result, router]);
+  }, [result, router, sourceNote]);
 
   const legs = result ? Object.entries(result.draft_legs) : [];
 
@@ -105,6 +158,7 @@ export default function Intake() {
         </div>
 
         {stage !== "extracted" && stage !== "creating" && (
+          <>
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -147,6 +201,40 @@ export default function Intake() {
               </>
             )}
           </div>
+
+          <div className="my-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-line" />
+            <span className="microlabel">or</span>
+            <span className="h-px flex-1 bg-line" />
+          </div>
+
+          <div className="card p-4">
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && note.trim() && stage !== "reading") {
+                  e.preventDefault();
+                  handleText(note.trim());
+                }
+              }}
+              rows={2}
+              disabled={stage === "reading"}
+              placeholder='Nothing booked yet? Just tell Guardian — "visiting family in Kansas over Thanksgiving, find me the cheapest flights"'
+              className="w-full resize-none bg-transparent text-sm leading-relaxed text-ink outline-none placeholder:text-ink-3"
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={() => note.trim() && handleText(note.trim())}
+                disabled={!note.trim() || stage === "reading"}
+                className="rounded-lg bg-accent px-4 py-2 text-[13px] font-semibold transition-opacity hover:opacity-90 disabled:opacity-35"
+                style={{ color: "var(--surface)" }}
+              >
+                Plan it
+              </button>
+            </div>
+          </div>
+          </>
         )}
 
         {(stage === "extracted" || stage === "creating") && result && (
