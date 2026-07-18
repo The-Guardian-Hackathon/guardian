@@ -4,6 +4,7 @@
 // the phone audio in the room to what's happening on screen.
 
 import { useEffect, useState } from "react";
+import { PhoneIcon } from "./Icons";
 import type { TripEvent } from "@/lib/types";
 
 const CALL_WINDOW_MS = 6000;
@@ -13,7 +14,7 @@ export function LiveCallIndicator({ events }: { events: TripEvent[] }) {
   const last = events[events.length - 1];
   const isCall =
     !!last &&
-    /📞|call|calling|called/i.test(last.message) &&
+    /call|calling|called|dialing/i.test(last.message) &&
     Date.now() - new Date(last.timestamp).getTime() < CALL_WINDOW_MS;
 
   // Re-check as the window expires so the light turns itself off.
@@ -25,12 +26,13 @@ export function LiveCallIndicator({ events }: { events: TripEvent[] }) {
 
   if (!isCall) return null;
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-green-500/15 px-4 py-1.5 text-sm font-bold text-green-300 ring-1 ring-green-400/60">
-      <span className="relative flex h-2.5 w-2.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-400" />
-      </span>
-      ON A LIVE CALL
+    <span
+      className="chip"
+      style={{ color: "var(--ok)", background: "var(--ok-soft)" }}
+    >
+      <span className="pulse-dot flex h-1.5 w-1.5 rounded-full" style={{ background: "currentColor" }} />
+      <PhoneIcon className="text-[12px]" />
+      Live call
     </span>
   );
 }

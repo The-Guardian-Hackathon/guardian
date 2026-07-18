@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { GavelIcon, ZapIcon } from "./Icons";
 
 export function ControlStrip({
   onBid,
@@ -15,17 +16,19 @@ export function ControlStrip({
   const [disruptFired, setDisruptFired] = useState(false);
 
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-      <div className="flex gap-3">
+    <div className="card flex items-center justify-between px-4 py-3">
+      <div className="flex gap-2.5">
         <button
           onClick={() => {
             setBidFired(true);
             onBid();
           }}
           disabled={bidFired}
-          className="rounded-xl bg-amber-500/90 px-4 py-2 text-sm font-bold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-40"
+          className="flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-35 dark:text-[#101013]"
+          style={{ color: "var(--surface)" }}
         >
-          ⚔️ Start bidding war (hotel)
+          <GavelIcon className="text-[14px]" />
+          Start bidding war
         </button>
         <button
           onClick={() => {
@@ -33,14 +36,13 @@ export function ControlStrip({
             onDisrupt();
           }}
           disabled={disruptFired}
-          className="rounded-xl bg-red-500/90 px-4 py-2 text-sm font-bold text-zinc-50 transition hover:bg-red-400 disabled:opacity-40"
+          className="flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-[13px] font-semibold text-ink transition-colors hover:bg-surface-2 disabled:opacity-35"
         >
-          ⚡ Simulate flight delay
+          <ZapIcon className="text-[14px]" style={{ color: "var(--bad)" }} />
+          Simulate flight delay
         </button>
       </div>
-      <span className="text-xs font-medium uppercase tracking-wider text-zinc-600">
-        {usingFixtures ? "fixture mode" : "live backend"}
-      </span>
+      <span className="microlabel">{usingFixtures ? "Fixture mode" : "Live"}</span>
     </div>
   );
 }

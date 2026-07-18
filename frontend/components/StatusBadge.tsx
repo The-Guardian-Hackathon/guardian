@@ -1,26 +1,21 @@
 import type { LegStatus } from "@/lib/types";
 
-const STYLES: Record<LegStatus, string> = {
-  draft: "bg-zinc-700/60 text-zinc-300 ring-zinc-500/40",
-  bidding: "bg-amber-500/15 text-amber-300 ring-amber-400/60 animate-pulse",
-  booked: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/50",
-  disrupted: "bg-red-500/20 text-red-300 ring-red-400/70 animate-pulse",
-};
-
-const LABELS: Record<LegStatus, string> = {
-  draft: "Draft",
-  bidding: "Bidding…",
-  booked: "Booked",
-  disrupted: "Disrupted",
+const STYLES: Record<LegStatus, { fg: string; bg: string; label: string; pulse?: boolean }> = {
+  draft: { fg: "var(--neutral)", bg: "var(--neutral-soft)", label: "Draft" },
+  bidding: { fg: "var(--warn)", bg: "var(--warn-soft)", label: "Bidding", pulse: true },
+  booked: { fg: "var(--ok)", bg: "var(--ok-soft)", label: "Booked" },
+  disrupted: { fg: "var(--bad)", bg: "var(--bad-soft)", label: "Disrupted", pulse: true },
 };
 
 export function StatusBadge({ status }: { status: LegStatus }) {
+  const s = STYLES[status];
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold uppercase tracking-wide ring-1 ${STYLES[status]}`}
-    >
-      <span className="h-2 w-2 rounded-full bg-current" />
-      {LABELS[status]}
+    <span className="chip" style={{ color: s.fg, background: s.bg }}>
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${s.pulse ? "pulse-dot" : ""}`}
+        style={{ background: "currentColor" }}
+      />
+      {s.label}
     </span>
   );
 }

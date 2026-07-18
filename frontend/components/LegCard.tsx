@@ -1,22 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
 import { StatusBadge } from "./StatusBadge";
+import { CarIcon, DinnerIcon, HotelIcon, PlaneIcon } from "./Icons";
 import { fmtPrice, fmtTime } from "@/lib/format";
 import type { Leg, LegName } from "@/lib/types";
 
-const META: Record<LegName, { icon: string; title: string }> = {
-  flight: { icon: "✈️", title: "Flight" },
-  hotel: { icon: "🏨", title: "Hotel" },
-  dinner: { icon: "🍽️", title: "Dinner" },
-  transport: { icon: "🚗", title: "Transport" },
+const META: Record<LegName, { Icon: ComponentType<SVGProps<SVGSVGElement>>; title: string }> = {
+  flight: { Icon: PlaneIcon, title: "Flight" },
+  hotel: { Icon: HotelIcon, title: "Hotel" },
+  dinner: { Icon: DinnerIcon, title: "Dinner" },
+  transport: { Icon: CarIcon, title: "Transport" },
 };
 
-const BORDER: Record<Leg["status"], string> = {
-  draft: "border-zinc-700",
-  bidding: "border-amber-400/70 shadow-[0_0_28px_-4px] shadow-amber-500/30",
-  booked: "border-emerald-500/50",
-  disrupted: "border-red-500/80 shadow-[0_0_32px_-4px] shadow-red-500/40",
+const EDGE: Record<Leg["status"], string> = {
+  draft: "var(--border-strong)",
+  bidding: "var(--warn)",
+  booked: "var(--ok)",
+  disrupted: "var(--bad)",
 };
 
 function rows(name: LegName, d: Record<string, unknown>): [string, string][] {
@@ -26,7 +27,7 @@ function rows(name: LegName, d: Record<string, unknown>): [string, string][] {
         ["Route", d.origin && d.dest ? `${d.origin} → ${d.dest}` : "—"],
         ["Flight", [d.carrier, d.flight_no].filter(Boolean).join(" ") || "—"],
         ["Departs", fmtTime(d.depart_iso)],
-        ["Arrives", fmtTime(d.arrive_iso) + (d.delay ? `  (${d.delay})` : "")],
+        ["Arrives", fmtTime(d.arrive_iso) + (d.delay ? ` (${d.delay})` : "")],
       ];
     case "hotel":
       return [
@@ -59,37 +60,42 @@ export function LegCard({ name, leg }: { name: LegName; leg: Leg }) {
     if (prev.current !== snapshot) {
       prev.current = snapshot;
       setFlash(true);
-      const id = setTimeout(() => setFlash(false), 900);
+      const id = setTimeout(() => setFlash(false), 1100);
       return () => clearTimeout(id);
     }
   }, [snapshot]);
 
-  const { icon, title } = META[name];
+  const { Icon, title } = META[name];
   const conf = leg.details.confirmation_id;
 
   return (
     <div
-      className={`rounded-2xl border-2 bg-zinc-900/80 p-5 transition-all duration-500 ${BORDER[leg.status]} ${
-        flash ? "scale-[1.02] bg-zinc-800" : ""
-      }`}
+      className={`card relative overflow-hidden p-5 transition-shadow ${flash ? "flash" : ""}`}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-xl font-bold text-zinc-100">
-          <span className="text-2xl">{icon}</span> {title}
+      <span
+        className="absolute inset-y-0 left-0 w-[3px] transition-colors duration-500"
+        style={{ background: EDGE[leg.status] }}
+      />
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2.5 text-[15px] font-semibold text-ink">
+          <Icon className="text-[17px] text-ink-3" />
+          {title}
         </h2>
         <StatusBadge status={leg.status} />
       </div>
-      <dl className="space-y-1.5">
+      <dl className="space-y-2">
         {rows(name, leg.details).map(([k, v]) => (
-          <div key={k} className="flex justify-between gap-3 text-[15px]">
-            <dt className="text-zinc-500">{k}</dt>
-            <dd className="text-right font-medium text-zinc-200">{v}</dd>
+          <div key={k} className="flex items-baseline justify-between gap-3 text-sm">
+            <dt className="shrink-0 text-ink-3">{k}</dt>
+            <dd className="text-right font-medium text-ink">{v}</dd>
           </div>
         ))}
       </dl>
-      <div className="mt-4 flex items-center justify-between border-t border-zinc-800 pt-3">
-        <span className="text-xs text-zinc-500">{conf ? `Conf. ${conf}` : " "}</span>
-        <span className="text-lg font-bold text-zinc-100">{fmtPrice(leg.price)}</span>
+      <div className="mt-4 flex items-baseline justify-between border-t border-line pt-3">
+        <span className="font-mono text-xs text-ink-3">{conf ? String(conf) : " "}</span>
+        <span className="text-base font-semibold tracking-tight text-ink">
+          {fmtPrice(leg.price)}
+        </span>
       </div>
     </div>
   );

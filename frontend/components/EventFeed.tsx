@@ -4,11 +4,11 @@ import { useEffect, useRef } from "react";
 import { fmtClock } from "@/lib/format";
 import type { Phase, TripEvent } from "@/lib/types";
 
-const PHASE_STYLE: Record<Phase, string> = {
-  listen: "bg-sky-500/15 text-sky-300",
-  win: "bg-amber-500/15 text-amber-300",
-  guard: "bg-violet-500/15 text-violet-300",
-  recover: "bg-red-500/15 text-red-300",
+const PHASE: Record<Phase, { color: string; label: string }> = {
+  listen: { color: "var(--accent)", label: "Listen" },
+  win: { color: "var(--warn)", label: "Win" },
+  guard: { color: "var(--neutral)", label: "Guard" },
+  recover: { color: "var(--bad)", label: "Recover" },
 };
 
 export function EventFeed({ events }: { events: TripEvent[] }) {
@@ -20,31 +20,47 @@ export function EventFeed({ events }: { events: TripEvent[] }) {
   const newestFirst = [...events].reverse();
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border-2 border-zinc-800 bg-zinc-900/80">
-      <div className="border-b border-zinc-800 px-5 py-3">
-        <h2 className="text-lg font-bold text-zinc-100">Guardian activity</h2>
+    <div className="card flex h-full flex-col overflow-hidden">
+      <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+        <h2 className="text-sm font-semibold text-ink">Activity</h2>
+        <span className="microlabel">{events.length} events</span>
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
         <div ref={topRef} />
         {newestFirst.length === 0 && (
-          <p className="py-8 text-center text-zinc-500">Quiet for now — Guardian is listening.</p>
+          <p className="py-10 text-center text-sm text-ink-3">
+            Quiet for now — Guardian is listening.
+          </p>
         )}
-        {newestFirst.map((e, i) => (
-          <div
-            key={events.length - i}
-            className={`rounded-xl bg-zinc-800/60 p-3 ${i === 0 ? "ring-1 ring-zinc-600" : ""}`}
-          >
-            <div className="mb-1 flex items-center gap-2">
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider ${PHASE_STYLE[e.phase]}`}
+        <ol className="relative space-y-0">
+          {newestFirst.map((e, i) => {
+            const p = PHASE[e.phase];
+            return (
+              <li
+                key={events.length - i}
+                className="relative grid grid-cols-[14px_1fr] gap-x-3 pb-5 last:pb-1"
               >
-                {e.phase}
-              </span>
-              <span className="text-xs text-zinc-500">{fmtClock(e.timestamp)}</span>
-            </div>
-            <p className="text-[15px] leading-snug text-zinc-200">{e.message}</p>
-          </div>
-        ))}
+                {/* rail */}
+                {i < newestFirst.length - 1 && (
+                  <span className="absolute top-[14px] left-[6px] h-full w-px bg-line" />
+                )}
+                <span
+                  className="relative top-[5px] h-[9px] w-[9px] justify-self-center rounded-full ring-4"
+                  style={{ background: p.color, ["--tw-ring-color" as string]: "var(--surface)" }}
+                />
+                <div className={i === 0 ? "" : "opacity-80"}>
+                  <div className="mb-0.5 flex items-baseline gap-2">
+                    <span className="text-[11px] font-semibold tracking-wide" style={{ color: p.color }}>
+                      {p.label}
+                    </span>
+                    <span className="font-mono text-[11px] text-ink-3">{fmtClock(e.timestamp)}</span>
+                  </div>
+                  <p className="text-[13.5px] leading-snug text-ink-2">{e.message}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </div>
   );

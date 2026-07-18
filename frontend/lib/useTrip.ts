@@ -42,11 +42,11 @@ function patchLeg(t: Trip, leg: LegName, patch: Partial<Trip["legs"][LegName]>):
 // ---- Fixture scripts: mirror what the real backend will do, on the same routes ----
 
 const BID_SCRIPT: Step[] = [
-  { after: 0, apply: (t) => ev(patchLeg(t, "hotel", { status: "bidding" }), "win", "📞 Calling Hotel Vitale — asking their best rate for 2 nights…") },
+  { after: 0, apply: (t) => ev(patchLeg(t, "hotel", { status: "bidding" }), "win", "Calling Hotel Vitale — asking their best rate for 2 nights…") },
   { after: 2500, apply: (t) => ev(t, "win", "Hotel Vitale opens at $240/night.") },
-  { after: 5000, apply: (t) => ev(t, "win", "📞 Calling Harbor Court — \"another property offered $240, can you beat it?\"") },
+  { after: 5000, apply: (t) => ev(t, "win", "Calling Harbor Court — \"another property offered $240, can you beat it?\"") },
   { after: 8000, apply: (t) => ev(t, "win", "Harbor Court counters: $205/night with breakfast included.") },
-  { after: 10500, apply: (t) => ev(t, "win", "📞 Back to Hotel Vitale with the counter — final round.") },
+  { after: 10500, apply: (t) => ev(t, "win", "Back to Hotel Vitale with the counter — final round.") },
   { after: 13500, apply: (t) => ev(t, "win", "Hotel Vitale's final: $198/night, no breakfast. Comparing value…") },
   {
     after: 16000,
@@ -58,10 +58,10 @@ const BID_SCRIPT: Step[] = [
           details: { name: "Harbor Court Hotel", perks: "Breakfast included", confirmation_id: "SAB-90227" },
         }),
         "win",
-        "🏆 Harbor Court wins — $205/night with breakfast. Booked via Sabre.",
+        "Harbor Court wins — $205/night with breakfast. Booked via Sabre.",
       ),
   },
-  { after: 18000, apply: (t) => ev(t, "win", "💳 payment_success — $410.00 charged via PayPal sandbox (2 nights).") },
+  { after: 18000, apply: (t) => ev(t, "win", "payment_success — $410.00 charged via PayPal sandbox (2 nights).") },
 ];
 
 const DISRUPT_SCRIPT: Step[] = [
@@ -71,7 +71,7 @@ const DISRUPT_SCRIPT: Step[] = [
       ev(
         patchLeg(t, "flight", { status: "disrupted", details: { delay: "+2h 00m" } }),
         "recover",
-        "⚠️ AA 178 delayed 120 minutes. Re-deriving the rest of your day…",
+        "AA 178 delayed 120 minutes. Re-deriving the rest of your day…",
       ),
   },
   { after: 2500, apply: (t) => ev(t, "recover", "Checking downstream impact: car pickup, hotel check-in window, 8 PM dinner.") },
@@ -81,7 +81,7 @@ const DISRUPT_SCRIPT: Step[] = [
       ev(
         patchLeg(t, "transport", { details: { pickup_iso: "2026-07-24T14:05:00-07:00" } }),
         "recover",
-        "🚗 Car pickup moved to 2:05 PM to meet the new arrival.",
+        "Car pickup moved to 2:05 PM to meet the new arrival.",
       ),
   },
   {
@@ -94,13 +94,13 @@ const DISRUPT_SCRIPT: Step[] = [
       ev(
         patchLeg(t, "dinner", { details: { time_iso: "2026-07-24T22:00:00-07:00" } }),
         "recover",
-        "📞 Called Kokkari — reservation moved from 8:00 PM to 10:00 PM, confirmed by the host.",
+        "Called Kokkari — reservation moved from 8:00 PM to 10:00 PM, confirmed by the host.",
       ),
   },
   {
     after: 12500,
     apply: (t) =>
-      ev(t, "guard", "🛡️ Guardrail: arrival before check-in ✓ · no overlaps ✓ · rebook Δ $0 within cap ✓ — committing plan."),
+      ev(t, "guard", "Guardrail: arrival before check-in ✓ · no overlaps ✓ · rebook Δ $0 within cap ✓ — committing plan."),
   },
   {
     after: 14500,
@@ -108,7 +108,7 @@ const DISRUPT_SCRIPT: Step[] = [
       ev(
         patchLeg(t, "flight", { status: "booked", details: { arrive_iso: "2026-07-24T13:32:00-07:00", delay: undefined } }),
         "recover",
-        "✅ Recovery complete. Here's your new day: land 1:32 PM, car 2:05 PM, check-in 3 PM, dinner 10 PM.",
+        "Recovery complete. Here's your new day: land 1:32 PM, car 2:05 PM, check-in 3 PM, dinner 10 PM.",
       ),
   },
 ];
