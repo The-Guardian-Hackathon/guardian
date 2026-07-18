@@ -1,38 +1,32 @@
-# The Guardian 🛡️
+# HoldBot 📞
 
-A voice AI agent that owns your entire trip lifecycle — planning, booking, protecting, recovering. Not a one-time booking bot.
+**Never wait on hold again.** Your flight gets cancelled → HoldBot parses the itinerary, calls the airline, waits on hold, negotiates the rebooking within your mandate, and you approve with one word. Built on Guardian at the Sabre × Vocal Bridge hackathon (July 2026).
 
-Built at the Sabre × Vocal Bridge hackathon (July 2026).
+**Trust model — mandate, menu, veto:** HoldBot decides freely inside your pre-authorized constraints, asks you mid-call on real tradeoffs, and structurally cannot commit or spend beyond the mandate without your explicit yes.
 
-## The four phases
+## Repo layout
 
-1. **Listen** — parses screenshots/posters and casual chat mentions (LandingAI) into a draft itinerary, no explicit command needed.
-2. **Win** — negotiates each trip leg across vendors by live voice call (Vocal Bridge), then pays via PayPal sandbox.
-3. **Guard** — monitors bookings; proposes better options and acts only after a one-word voice confirm. *(roadmap)*
-4. **Recover** — a disruption on one leg cascades fixes across the whole remaining day, then the agent briefs you by voice: "here's your new day."
-
-## Repo layout — two people, zero merge conflicts
-
-| Folder | Owner | What lives here |
+| Folder | Owner | What |
 |---|---|---|
-| `backend/` | Khushi | Node/Express "trip brain": shared trip-state API, Vocal Bridge calls, bidding engine, Sabre booking, PayPal payment, disruption cascade |
-| `frontend/` | Teammate | Next.js dashboard: live trip board, event feed, LandingAI screenshot parsing, demo controls |
-| `docs/CONTRACT.md` | **FROZEN** | The shared schema + REST API both halves build against. Change it only by talking to each other first. |
+| `frontend/` | Khushi | Next.js dashboard: PDF/screenshot upload → LandingAI parse (real) → live call screen → approve/reject → confirmation |
+| `mock-server/` | Khushi | CONTRACT v2 mock backend on :4100 with a scripted airline call (AUTO_ADVANCE=1) so the demo runs solo |
+| `backend/` | Teammate | Real backend on :4000, same routes: Vocal Bridge calls, Sabre lookup, PayPal |
+| `docs/CONTRACT.md` | **FROZEN** | The shared session schema + REST routes |
+| `docs/PITCH.md` | — | Pitch model & Q&A prep |
 
-## Rules of engagement
-
-- Never edit the other person's folder.
-- `docs/CONTRACT.md` is the only coupling point. Read it first, build to it exactly.
-- Everything works in MOCK mode first; real API keys swap in behind flags without changing shapes.
-- PayPal is **sandbox only**, always.
-- No real hotels/airlines/restaurants get called — vendor calls are Vocal Bridge ↔ Vocal Bridge or mocked.
-
-## Getting started
+## Run the demo (no real backend needed)
 
 ```bash
-# Khushi
-cd backend && cp .env.example .env   # fill keys as they arrive from the hackathon Discord
-
-# Teammate
-cd frontend && cp .env.example .env.local
+cd mock-server && npm i && npm start          # :4100
+cd frontend && cp .env.example .env.local && npm i && npm run dev   # :3000
 ```
+
+Upload `frontend/public/demo-cancelled-itinerary.pdf`, confirm the parse, watch the call, approve.
+Reset between rehearsals: `curl -X POST localhost:4100/session/demo/reset`
+
+Swap to the real backend: set `NEXT_PUBLIC_BACKEND_URL=http://localhost:4000` — zero code changes.
+
+## Rules
+
+- Never call real airlines/hotels — the "airline agent" is a second VB agent or a teammate's phone.
+- PayPal sandbox only. HoldBot discloses it's an AI at the top of every call.

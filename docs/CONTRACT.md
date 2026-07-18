@@ -1,57 +1,63 @@
-# CONTRACT — frozen shared interface
+# CONTRACT v2 — HoldBot (frozen shared interface)
 
-Both halves of Guardian build against this file. **Do not change shapes or routes without both teammates agreeing.** Additive optional fields are OK; renames/removals are not.
+**Pivot 2026-07-18 ~1 PM:** we narrowed to HoldBot — flight-cancellation recovery by phone.
+Old Guardian trip contract is in git history; this file is now the single source of truth.
+**Do not change shapes. Additive optional fields only.**
 
-The backend (`backend/`, port **4000**) owns this data and serves it. The frontend (`frontend/`, port **3000**) reads and renders it, and triggers demo actions.
+## Ownership
 
-## Trip object
+| Piece | Owner |
+|---|---|
+| Dashboard (upload → parse → review → confirm), LandingAI parsing, mock server | Khushi |
+| Real backend at these same routes: Vocal Bridge calls, Sabre lookup, PayPal | Teammate |
+
+The dashboard talks to `NEXT_PUBLIC_BACKEND_URL`. Mock server runs on **:4100**;
+teammate's real backend on **:4000**. Swap = one env change, zero code.
+
+## Session object
 
 ```json
 {
-  "trip_id": "string",
-  "traveler": { "name": "string", "phone": "string" },
-  "legs": {
-    "flight":    { "status": "draft|bidding|booked|disrupted", "details": {}, "price": null },
-    "hotel":     { "status": "draft|bidding|booked|disrupted", "details": {}, "price": null },
-    "dinner":    { "status": "draft|bidding|booked|disrupted", "details": {}, "price": null },
-    "transport": { "status": "draft|bidding|booked|disrupted", "details": {}, "price": null }
+  "session_id": "string",
+  "original_flight": {
+    "flight_number": null, "date": null, "time": null,
+    "passenger_name": null, "booking_ref": null, "route": null
   },
+  "rebooking": {
+    "status": "idle|calling_negotiate|awaiting_approval|approved|rejected|calling_confirm|confirmed",
+    "new_flight_details": { "time": null, "date": null, "fee": null },
+    "transcript_summary": null
+  },
+  "payment": { "status": "pending|paid|failed", "amount": null, "transaction_id": null },
   "events": []
 }
 ```
 
-- `details` is a free-form object per leg. Suggested keys so the dashboard can render nicely:
-  - flight: `carrier`, `flight_no`, `depart_iso`, `arrive_iso`, `origin`, `dest`, `confirmation_id`
-  - hotel: `name`, `checkin_iso`, `nights`, `perks`, `confirmation_id`
-  - dinner: `restaurant`, `time_iso`, `party_size`, `confirmation_id`
-  - transport: `type`, `pickup_iso`, `pickup_location`, `confirmation_id`
-- `price` is a number (USD) or null.
-- **Legs are dynamic (additive, non-breaking):** the four keys above are the core set, but `legs` may contain any keys — e.g. `flight_return` for a round trip, `food` instead of/alongside `dinner`, `activity` for an explore suggestion. Omit slots that aren't relevant (late-night arrival → no food slot). The frontend renders whatever keys exist; icon/kind is inferred from the key name. Draft legs should carry `details.reason` (a one-line "why Guardian drafted this") — the dashboard displays it.
-- `events` is **append-only**. Each entry:
+- All `original_flight` / `new_flight_details` values are strings (fee is a number) or null.
+- `events` is append-only: `{ "timestamp": "ISO-8601", "message": "string" }`.
+  Messages are plain professional sentences — the feed renders them verbatim.
+  Call-ish words ("calling", "on hold", "dialing") light the live-call indicator.
+- `transcript_summary`: one or two sentences of what the airline agent said/offered.
 
-```json
-{ "timestamp": "ISO-8601", "phase": "listen|win|guard|recover", "message": "string" }
-```
+## REST API (same routes on mock :4100 and real :4000)
 
-## REST API (served by backend at `http://localhost:4000`)
+| Method & path | Body | Effect |
+|---|---|---|
+| `GET /session/:id` | — | full session. Dashboard polls this every 1.5s — it's the live wire. |
+| `PATCH /session/:id` | partial session | shallow-merge per top-level key. Dashboard PATCHes `original_flight` after parsing; backend PATCHes `rebooking`/`payment` as calls progress. |
+| `POST /session/:id/events` | one event | append to the log |
+| `POST /session/:id/approve` | `{}` | user approved the proposal → backend sets `calling_confirm`, makes the confirm call, then `confirmed` + payment |
+| `POST /session/:id/reject` | `{}` | → status `rejected`, end state |
 
-| Method & path | Body | Returns | Notes |
-|---|---|---|---|
-| `POST /trip` | `{ "draft_legs": {...}, "traveler": {...} }` (optional) | full trip object | Creates a trip. Frontend calls this after LandingAI extraction with whatever legs it parsed. |
-| `GET /trip/:id` | — | full trip object | Dashboard polls this every 1–2s. This is the live wire. |
-| `PATCH /trip/:id/leg/:legName` | `{ "status"?, "details"?, "price"? }` | updated trip object | Partial update; merge, don't replace `details`. |
-| `POST /trip/:id/events` | one event object | `{ "ok": true }` | Append to the log. |
-| `POST /trip/:id/bid/:legName` | `{}` | `202 { "ok": true }` | Kicks off the bidding war for that leg. Backend streams progress via events + PATCHes; frontend just watches. |
-| `POST /trip/:id/disrupt` | `{ "leg": "flight", "reason": "delayed", "delay_minutes": 120 }` | `202 { "ok": true }` | Demo trigger. Backend runs the recovery cascade; progress arrives via events + leg updates. |
+Seed: both servers boot with one session, id **`demo`**, everything null/idle.
 
-Frontend never mutates leg state except through these routes. Backend never renders UI.
+## Status flow the dashboard renders
 
-## Mock mode
+`idle` → (parse done, backend notices original_flight) → `calling_negotiate`
+→ `awaiting_approval` (proposal card: new time/date/fee + transcript_summary)
+→ approve → `calling_confirm` → `confirmed` (+ payment paid)
+→ or reject → `rejected`.
 
-Backend env `MOCK=1` (default): every route works with realistic canned data and simulated bidding/booking, so the frontend is never blocked. `MOCK=0` swaps in real Sabre/PayPal/Vocal Bridge behind the same shapes.
-
-Frontend env `NEXT_PUBLIC_BACKEND_URL` defaults to `http://localhost:4000`. Until the backend is up, the frontend uses a local fixture file matching this contract exactly.
-
-## Demo phone numbers
-
-Outbound Vocal Bridge calls in the demo target *our own* numbers (a teammate's phone or a second VB agent standing in as "the restaurant"). Real businesses are never called.
+Backend: drive drama through `events` while a status is active — the audience
+watches the feed during the live phone call ("Dialing United…", "On hold — position 4",
+"Agent picked up", "Negotiating…").

@@ -34,6 +34,29 @@ const TRIP_SCHEMA = {
   },
 };
 
+// HoldBot: cancelled-itinerary parsing (PDF or screenshot) -> CONTRACT v2
+// original_flight shape, extracted verbatim.
+const CANCELLED_FLIGHT_SCHEMA = {
+  type: "object",
+  properties: {
+    flight_number: { type: "string", description: "Flight number, e.g. UA 1284" },
+    date: { type: "string", description: "Flight date in ISO 8601 (YYYY-MM-DD)" },
+    time: { type: "string", description: "Scheduled departure time, e.g. 6:40 PM" },
+    passenger_name: { type: "string", description: "Passenger's full name" },
+    booking_ref: { type: "string", description: "Booking reference / record locator / confirmation code" },
+    route: { type: "string", description: "Route as ORIGIN → DESTINATION airport codes, e.g. SFO → ORD" },
+  },
+};
+
+const MOCK_FLIGHT = {
+  flight_number: "UA 1284",
+  date: "2026-07-18",
+  time: "6:40 PM",
+  passenger_name: "Khushi Chandra",
+  booking_ref: "H8K2QX",
+  route: "SFO → ORD",
+};
+
 // For free-text intent ("visiting family in Kansas over Thanksgiving") — nothing
 // is booked yet, so we extract the plan, not confirmations.
 const INTENT_SCHEMA = {
@@ -239,6 +262,35 @@ export async function POST(req: NextRequest) {
   const text: string | undefined = typeof body.text === "string" ? body.text.trim() : undefined;
   const mime: string = body.mime ?? "image/png";
   const apiKey = process.env.LANDINGAI_API_KEY;
+
+  // Path 0 (HoldBot): mode "flight" — parse a cancelled itinerary (PDF or image)
+  // into the CONTRACT v2 original_flight shape.
+  if (body.mode === "flight") {
+    if (image && apiKey) {
+      try {
+        const markdown = await adeParse(image, mime, apiKey);
+        const x = await adeExtract(markdown, apiKey, CANCELLED_FLIGHT_SCHEMA);
+        const s = (k: string) =>
+          typeof x[k] === "string" && (x[k] as string).trim() ? (x[k] as string).trim() : null;
+        const flight = {
+          flight_number: s("flight_number"),
+          date: s("date"),
+          time: s("time"),
+          passenger_name: s("passenger_name"),
+          booking_ref: s("booking_ref"),
+          route: s("route"),
+        };
+        if (flight.flight_number || flight.booking_ref) {
+          return NextResponse.json({ mocked: false, original_flight: flight });
+        }
+        console.error("Flight parse found nothing usable:", x);
+      } catch (e) {
+        console.error("LandingAI flight parse failed, falling back to mock:", e);
+      }
+    }
+    await new Promise((r) => setTimeout(r, 800));
+    return NextResponse.json({ mocked: true, original_flight: MOCK_FLIGHT });
+  }
 
   // Path 1: typed intent — extract the plan straight from the text.
   if (text && !image) {
