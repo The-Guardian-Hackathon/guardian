@@ -1,33 +1,70 @@
-# Khushi's prompt — paste into Claude Code inside `backend/`
+# Person A's prompt — Voice & Booking (paste into Claude Code inside `backend/`)
 
 ```
-Build the backend for "The Guardian," a voice AI travel agent, in this backend/ folder. I own the LIVE VOICE + BOOKING + PAYMENT half. My teammate owns the dashboard UI and visual parsing in ../frontend — do NOT touch that folder. The frozen shared interface is ../docs/CONTRACT.md: read it first and implement it exactly. Do not change any route or JSON shape.
+I'm building a hackathon project: a voice AI agent that handles flight cancellation recovery. Full flow: user uploads a cancelled flight itinerary PDF → my teammate's system parses it and finds rebooking options → my agent CALLS THE USER'S REAL PHONE NUMBER and negotiates the rebooking live (the user answers and role-plays as the airline rep) → proposal gets reviewed on a web app → if approved, my agent CALLS THE USER'S PHONE AGAIN to confirm → payment is processed.
 
-TECH STACK: Node.js + Express, plain REST, in-memory trip store (a dict keyed by trip_id is fine; SQLite only if trivial). Port 4000. Read config from .env (see .env.example). Optimize for "works reliably live on stage in 5 hours" over architectural purity.
+I have ~5 hours and one teammate. I own the VOICE CALLS + BOOKING LOOKUP + PAYMENT half. My teammate owns PDF parsing, the shared backend/schema, and the review dashboard UI.
 
-APIS: Vocal Bridge (voice), Sabre (flight/hotel search + booking), PayPal (payment, SANDBOX ONLY). I will paste real docs/SDK snippets from the hackathon Discord as I get them — when I do, adapt to the actual method signatures instead of guessing. Until then, build against clearly-labeled mocks (MOCK_SABRE_BOOK, MOCK_PAYPAL_CHARGE, MOCK_VB_CALL) behind the MOCK=1 env flag, each with a TODO marking the swap-in point, so nothing ever blocks on missing credentials.
+TECH STACK: Node.js/Express (or Python/FastAPI — pick one, stay consistent). REST endpoints, no heavy framework — we need this working end to end in 5 hours, not architecturally pretty.
 
-BUILD ORDER — checkpoint after each step, and after each step give me a curl command to verify it:
+APIS: Vocal Bridge (outbound voice calls — confirmed our plan includes Pilot/outbound calling access), Sabre APIs (flight lookup/rebooking search), PayPal (fee payment). I'll paste in real docs/keys as I get them from Discord — adapt your calls to match real method signatures when I do. Until then, build against clearly-labeled mock functions (MOCK_SABRE_SEARCH, MOCK_PAYPAL_CHARGE) so the rest of the system works and we can swap in real calls without breaking anything.
 
-STEP 0 (first 30 min): The shared trip-state API from CONTRACT.md — POST /trip, GET /trip/:id, PATCH /trip/:id/leg/:legName, POST /trip/:id/events, plus 202 stubs for /bid and /disrupt. My teammate's dashboard consumes this immediately, so it ships first and must be contract-perfect, with realistic seeded demo data (a JFK→SFO flight, a hotel, an 8pm dinner, a car pickup).
+SHARED SCHEMA (do not change shape — my teammate's backend and dashboard read/write this too):
+{
+  "session_id": "string",
+  "original_flight": {
+    "flight_number": null, "date": null, "time": null,
+    "passenger_name": null, "booking_ref": null, "route": null
+  },
+  "rebooking": {
+    "status": "idle|calling_negotiate|awaiting_approval|approved|rejected|calling_confirm|confirmed",
+    "new_flight_details": { "time": null, "date": null, "fee": null },
+    "transcript_summary": null
+  },
+  "payment": { "status": "pending|paid|failed", "amount": null, "transaction_id": null },
+  "events": []   // append-only log: { "timestamp", "phase", "message" }
+}
 
-STEP 1 (hour 1-2): Bidding War Engine for the hotel leg, behind POST /trip/:id/bid/hotel.
-- 2-3 mock vendor agents (local functions), each with a name, base price, perks, and a counter-offer function that drops price when told a competitor's offer.
-- Bidding loop: get vendor A's price, tell vendor B "another property offered $X with breakfast, can you match or beat it?", collect counters, max 2-3 rounds, pick the winner.
-- Voice it through Vocal Bridge so the negotiation audibly happens (agent-to-mock-vendor-agent, or agent narrating each round). Never call real businesses — only DEMO_VENDOR_PHONE or VB-to-VB.
-- Set leg status "bidding" at start; append one event per round (phase "win") so the dashboard shows the war live; on winner, PATCH the leg to "booked" with final price and details.
+Expose/consume via REST:
+- GET /session/:id
+- PATCH /session/:id  (update any top-level field)
+- POST /session/:id/events
 
-STEP 2 (hour 2-3): Sabre booking + PayPal payment, chained after a bid wins.
-- Winner → Sabre booking call (or MOCK_SABRE_BOOK) → on success, PayPal sandbox charge for the agreed price (or MOCK_PAYPAL_CHARGE) → on success, write confirmation_id into details and append a "payment_success" event.
-- Ordering guarantees: if Sabre fails, never charge. If payment fails, log the event and do NOT mark booked. Never a real charge outside sandbox.
+MY BUILD ORDER (checkpoint after each step):
 
-STEP 3 (hour 3-4): Disruption Recovery behind POST /trip/:id/disrupt {"leg":"flight","reason":"delayed","delay_minutes":120}.
-- Mark the leg "disrupted", re-derive every dependent booked leg with simple rules: flight delayed by X minutes → push dinner time and transport pickup by X, flag the hotel if arrival passes the check-in window.
-- Re-run a mini bid to "rebook" the disrupted leg via mock vendors.
-- GUARDRAIL before committing anything: validate the new plan (new arrival before hotel check-in, no overlapping times, rebook price delta under a sane cap). If a check fails, commit nothing, append an event naming the failed check. Log every check.
-- On pass: apply all PATCHes, then a Vocal Bridge call voices the briefing: "Your flight was delayed, I've rebooked you and moved dinner and your pickup — here's your new day," reading back the updated details. Append everything as phase "recover" events.
+STEP 1 (Hour 1): Scaffolding + Sabre lookup
+- Build a simple function that takes the parsed original_flight data (which my teammate will populate) and calls Sabre to search for rebooking options on the same route (mock as MOCK_SABRE_SEARCH returning 2-3 fake flight options if real access isn't ready).
+- Store the top rebooking option candidate — this becomes context the agent uses when it calls.
 
-STEP 4 (hour 4-5): Reliability. Run the two live-call moments (bid winner, recovery briefing) 3+ times back to back; fix flakiness. Clean logging so a live failure is diagnosable in seconds. Verify with my teammate that the dashboard reflects every state change.
+STEP 2 (Hour 1-2.5): Outbound Call #1 — Negotiate
+- Build the Vocal Bridge outbound call: agent dials the user's real phone number (configurable, will be my number during testing).
+- Agent's call script: introduce itself as calling on behalf of the passenger about the cancelled flight, ask about rebooking options, negotiate (mention the Sabre-found option as a reference point: "I see there's a 3:45pm flight available, does that work / is there a fee?").
+- The user (playing the airline rep) will respond naturally — capture the call transcript.
+- After the call ends, extract structured data from the transcript (new flight time, fee amount) — use an LLM call (function calling / structured extraction) on the transcript text to pull these into new_flight_details.
+- PATCH /session/:id to update rebooking.status to "awaiting_approval" and populate new_flight_details.
+- POST an event: "Negotiation complete, awaiting your review."
 
-Start with STEP 0 right now.
+STEP 3 (Hour 2.5-3.5): Approval listener + Outbound Call #2 — Confirm
+- Build an endpoint POST /session/:id/approve that my teammate's dashboard hits when the user taps Approve.
+- On receiving approval, trigger Vocal Bridge outbound call #2: a short call back to the same phone number, script: "Hi, calling to confirm we're accepting the [time] rebooking for [fee]." User answers again as the airline rep to confirm.
+- After confirmation, PATCH status to "confirmed".
+- Build a matching POST /session/:id/reject endpoint that just logs a rejection event and stops (status → "rejected") — doesn't need to do anything fancy.
+
+STEP 4 (Hour 3.5-4.5): PayPal payment
+- On successful confirm call, if there's a fee > 0, trigger a PayPal sandbox payment for that amount (mock as MOCK_PAYPAL_CHARGE until real sandbox keys are in).
+- On success, PATCH payment.status to "paid" with a transaction_id, log event "Payment processed."
+- Handle failure gracefully: log it, don't mark session as fully confirmed if payment fails.
+
+STEP 5 (Hour 4.5-5): Polish + rehearse
+- Test both calls end-to-end at least 3 times back-to-back — outbound calling is the riskiest live element, make sure it reliably connects and the transcript extraction reliably produces usable structured data.
+- Add basic retry/error handling if a call fails to connect (log clearly, don't crash the whole flow).
+- Sync with teammate: confirm every status change you produce shows up correctly on their dashboard.
+
+CONSTRAINTS:
+- Only ever call the real phone number provided for testing — never call a real airline or third party.
+- PayPal must stay in sandbox mode, never a live charge.
+- If Vocal Bridge, Sabre, or PayPal real credentials aren't ready by hour 2, proceed fully on mocks with clear TODO markers — don't block.
+- Prioritize "the two calls reliably work live" above all other polish — this is the core of the demo.
+
+Start by scaffolding the shared session schema REST API (GET/PATCH/POST), since my teammate needs this immediately too, then move to Step 1.
 ```

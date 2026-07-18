@@ -1,29 +1,71 @@
-# Teammate's prompt — paste into Claude Code inside `frontend/`
+# Person 2's prompt — Intake & Review UI (paste into Claude Code inside `frontend/`)
 
 ```
-Build the frontend for "The Guardian," a voice AI travel agent, as a Next.js (App Router) app in this frontend/ folder. I own the ITINERARY DASHBOARD + VISUAL PARSING half. My teammate Khushi owns the backend trip brain (voice calls, bidding, Sabre booking, PayPal) in ../backend — do NOT touch that folder. The frozen shared interface is ../docs/CONTRACT.md: read it first and consume it exactly. Do not change any route or JSON shape.
+I'm building a hackathon project: a voice AI agent that handles flight cancellation recovery. Full flow: user uploads a cancelled flight itinerary PDF → I parse it and extract flight details → my teammate's agent calls the user's real phone to negotiate a rebooking → the proposed new flight shows up on my dashboard for review → user approves or rejects → my teammate's agent calls again to confirm → payment processes → dashboard shows final confirmation.
 
-TECH STACK: Next.js + React + Tailwind, no heavy state library. The backend runs at NEXT_PUBLIC_BACKEND_URL (see .env.example), port 4000. This is a 5-hour hackathon: optimize for a gorgeous, legible, projector-friendly live demo over architecture. Do not use HTML <form> tags; use onClick/onChange handlers.
+I have ~5 hours and one teammate. I own PDF PARSING + SHARED BACKEND/SCHEMA + REVIEW DASHBOARD. My teammate owns the live voice calls, Sabre lookup, and PayPal payment.
 
-CRITICAL FIRST MOVE: create lib/fixtures.ts with a complete fake trip object matching CONTRACT.md exactly (flight JFK→SFO, hotel, 8pm dinner, car pickup, a few events), and build the entire UI against it behind a USE_FIXTURES flag. The backend may not exist for the first hour — I must never be blocked. Flip to real fetches at the end of each step.
+TECH STACK: React (Vite, simple setup) for the dashboard, talking to a small REST backend. My teammate is building the backend API endpoints — assume they exist at the routes below even before they're live; build against a local mock server matching the same schema so I'm not blocked waiting on them.
 
-BUILD ORDER — checkpoint after each step:
+APIS: LandingAI (PDF/document parsing) for extracting itinerary details. I'll paste in real docs/keys as I get them from Discord — adapt integration to match. Until then, build against a clearly-labeled mock function (MOCK_LANDINGAI_PARSE) with a realistic hardcoded response so the rest of the flow works.
 
-STEP 1 (hour 1-2): The live trip dashboard. This is the projector screen for the whole demo.
-- Poll GET /trip/:id every 1.5s (SWR or a simple interval).
-- Four leg cards (flight, hotel, dinner, transport) rendering details and price, with big status badges color-coded by state: draft (gray), bidding (amber, pulsing), booked (green), disrupted (red, attention-grabbing). Status transitions should animate — judges must SEE the state flip from across the room.
-- A live event feed panel: the append-only events array, newest on top, auto-scrolling, timestamped, badge per phase (listen/win/guard/recover). During the bidding war this feed shows each round land in real time; make it feel alive.
+SHARED SCHEMA (do not change shape — my teammate's backend reads/writes this too):
+{
+  "session_id": "string",
+  "original_flight": {
+    "flight_number": null, "date": null, "time": null,
+    "passenger_name": null, "booking_ref": null, "route": null
+  },
+  "rebooking": {
+    "status": "idle|calling_negotiate|awaiting_approval|approved|rejected|calling_confirm|confirmed",
+    "new_flight_details": { "time": null, "date": null, "fee": null },
+    "transcript_summary": null
+  },
+  "payment": { "status": "pending|paid|failed", "amount": null, "transaction_id": null },
+  "events": []
+}
 
-STEP 2 (hour 2-3): Phase 1 "Listen" — visual parsing intake (this is our LandingAI award).
-- A drop zone for a screenshot/poster/confirmation-email image. On drop, send it to a Next.js API route /api/extract which calls LandingAI ADE server-side (LANDINGAI_API_KEY stays server-only, never in the browser). I will paste the real LandingAI docs when I have them — until then return a clearly-labeled MOCK_EXTRACT result with the same shape: { traveler, draft_legs } per CONTRACT.md's details keys.
-- Show the extracted fields ("what Guardian heard") for a beat, then POST /trip with the draft legs and route to the dashboard showing the new trip in draft state. The demo arc: messy screenshot in → structured trip out, no typing.
+Assume REST endpoints exist at:
+- GET /session/:id
+- PATCH /session/:id
+- POST /session/:id/events
+- POST /session/:id/approve
+- POST /session/:id/reject
 
-STEP 3 (hour 3-4): Demo controls + phase choreography.
-- A control strip (subtle, bottom of dashboard): "Start bidding war" → POST /trip/:id/bid/hotel; "Simulate flight delay" → POST /trip/:id/disrupt with {"leg":"flight","reason":"delayed","delay_minutes":120}. Both just fire-and-forget (202) — all resulting drama arrives through polling as leg updates and events.
-- During recovery, make the cascade legible: the disrupted flight card goes red, then dependent cards visibly update (dinner time shifts, pickup shifts) one by one as PATCHes land, then settle green. A "Here's your new day" banner when a phase-"recover" event announces completion.
-- An "on a live call" indicator that lights up whenever recent events mention a voice call, so the audience connects the phone audio to the screen.
+MY BUILD ORDER (checkpoint after each step):
 
-STEP 4 (hour 4-5): Polish + rehearsal. Big fonts and high contrast (projector!), empty/loading states that never look broken, kill all console errors. Run the full arc 3+ times against Khushi's real backend: screenshot → trip → bidding war → booked+paid → disruption → recovered day.
+STEP 1 (Hour 1): Schema + mock backend
+- Set up a local mock server (json-server or a few Express stubs) implementing the endpoints above, so I can build the dashboard independently before my teammate's real backend is live.
+- Seed it with one sample session with realistic fake original_flight data.
+- Finalize and share this schema file with my teammate immediately — this is the fixed contract, don't let it drift.
 
-Start with the fixtures file and STEP 1 right now.
+STEP 2 (Hour 1-2): Upload + LandingAI parsing
+- Build the upload screen: a simple file drop/upload for a PDF itinerary.
+- On upload, send the PDF to LandingAI to extract flight_number, date, time, passenger_name, booking_ref, route. Mock this as MOCK_LANDINGAI_PARSE returning realistic hardcoded values if real access isn't ready — clearly marked TODO for swapping in the real call.
+- PATCH /session/:id with the extracted original_flight data.
+- Show a clean "Here's what we found" confirmation screen with the extracted details before proceeding.
+
+STEP 3 (Hour 2-3): Live status + call-in-progress UI
+- Build a "Finding your options and calling the airline..." screen that appears once parsing is done, polling GET /session/:id every 1-2 seconds to reflect rebooking.status changes live (idle → calling_negotiate → awaiting_approval).
+- Show a simple animated "call in progress" indicator (pulsing phone icon, timer) during calling_negotiate — this is a key visual beat since the actual call is happening on a real phone off-screen, so the screen needs to visibly communicate "something is happening right now."
+- Show the events log as a scrolling feed underneath for extra visible detail.
+
+STEP 4 (Hour 3-4): Review + Approve/Reject card
+- When status hits "awaiting_approval", show a clear proposal card: new flight time/date and fee, extracted from new_flight_details, with big Approve / Reject buttons.
+- Approve button calls POST /session/:id/approve — then screen transitions back to a "Calling to confirm..." status screen (same pattern as Step 3), polling until status becomes "confirmed".
+- Reject button calls POST /session/:id/reject — show a simple "Rebooking cancelled" end state.
+- When status becomes "confirmed", show a final confirmation screen with the new flight details and payment status (from the payment object).
+
+STEP 5 (Hour 4-5): Integration + polish + rehearse
+- Swap the dashboard's data source from your local mock server to my teammate's real backend once ready (should just be a base URL change if schema held).
+- Test the full flow end to end at least 3 times: upload PDF → parsed details shown → calling screen → proposal review → approve → confirming screen → final confirmation with payment.
+- Polish visuals last (status colors, animations) only after the flow is functionally reliable — reliability matters far more than aesthetics for this demo.
+
+CONSTRAINTS:
+- Do not change the shared schema shape after Step 1 hand-off — add optional fields if needed, don't restructure existing ones.
+- Keep polling simple (1-2s interval) rather than building websockets — robustness over elegance given the timebox.
+- If LandingAI real access isn't ready by hour 2, proceed with the mock and keep the swap-in clearly marked — don't block on it.
+- The "call in progress" UI moments (Step 3) are important — since the real action happens on a phone off-screen, the dashboard needs to make the audience feel like something live is happening, not just staring at a static loading spinner.
+
+Start by scaffolding the mock backend + shared schema file, then move to Step 2 (upload + parsing) immediately after.
 ```
