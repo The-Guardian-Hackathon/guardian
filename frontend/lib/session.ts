@@ -29,6 +29,9 @@ export interface OriginalFlight {
 
 export interface Session {
   session_id: string;
+  // Additive optional field (CONTRACT allows): the user's plain-language
+  // instructions for the call — what HoldBot may accept without asking.
+  mandate?: string | null;
   original_flight: OriginalFlight;
   rebooking: {
     status: RebookStatus;

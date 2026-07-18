@@ -211,6 +211,13 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
           </span>
         </div>
 
+        {session.mandate && (
+          <div className="card mb-4 px-4 py-3">
+            <p className="microlabel mb-1">Your mandate — HoldBot won&apos;t go beyond this without asking</p>
+            <p className="text-[13.5px] leading-snug text-ink-2">&ldquo;{session.mandate}&rdquo;</p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-4">
           {status === "idle" && (
             <div className="card py-10 text-center text-sm text-ink-2">

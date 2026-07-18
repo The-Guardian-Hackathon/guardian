@@ -14,6 +14,7 @@ app.use(express.json({ limit: "2mb" }));
 
 const freshSession = (id) => ({
   session_id: id,
+  mandate: null,
   original_flight: {
     flight_number: null, date: null, time: null,
     passenger_name: null, booking_ref: null, route: null,
@@ -42,7 +43,7 @@ function playNegotiateScript(s) {
   at(4000, () => ev(s, "On hold. You're position 4 in the queue — HoldBot is waiting so you don't have to."));
   at(9000, () => ev(s, "Still on hold — position 2. Elapsed 6 minutes (compressed for demo)."));
   at(13000, () => ev(s, "Airline agent picked up. HoldBot: \"I'm an AI assistant calling on behalf of the passenger, booking ref on file — the flight was cancelled, we need the earliest option tomorrow.\""));
-  at(18000, () => ev(s, "Agent offered two options. Negotiating within your mandate: earliest flight, no red-eye, fee under $150."));
+  at(18000, () => ev(s, `Agent offered two options. Negotiating within your mandate: "${s.mandate ?? "earliest flight, no red-eye, fee under $150"}"`));
   at(22000, () => {
     s.rebooking.new_flight_details = { date: "2026-07-19", time: "7:15 AM", fee: 75 };
     s.rebooking.transcript_summary =

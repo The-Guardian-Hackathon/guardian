@@ -28,6 +28,7 @@ export default function Intake() {
   const [stage, setStage] = useState<Stage>("idle");
   const [dragging, setDragging] = useState(false);
   const [flight, setFlight] = useState<OriginalFlight | null>(null);
+  const [mandate, setMandate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const handleFile = useCallback(async (file: File) => {
@@ -63,13 +64,16 @@ export default function Intake() {
     if (!flight) return;
     setStage("starting");
     try {
-      await patchSession(SESSION_ID, { original_flight: flight });
+      await patchSession(SESSION_ID, {
+        original_flight: flight,
+        mandate: mandate.trim() || "Earliest flight out, no red-eyes, keep any fees under $150.",
+      });
       router.push(`/session/${SESSION_ID}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "backend unreachable — is the mock server on :4100 running?");
       setStage("extracted");
     }
-  }, [flight, router]);
+  }, [flight, mandate, router]);
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center bg-bg px-6 py-10">
@@ -150,6 +154,20 @@ export default function Intake() {
                 </div>
               ))}
             </dl>
+            <div className="mb-4">
+              <p className="microlabel mb-1.5">Your instructions for the call</p>
+              <textarea
+                value={mandate}
+                onChange={(e) => setMandate(e.target.value)}
+                rows={2}
+                placeholder='e.g. "Earliest flight out, no red-eyes, aisle seat if possible — and don&apos;t accept more than $150 in fees."'
+                className="w-full resize-none rounded-lg border border-line bg-surface-2 px-3 py-2.5 text-sm leading-relaxed text-ink outline-none placeholder:text-ink-3 focus:border-[var(--accent)]"
+              />
+              <p className="mt-1.5 text-[11.5px] leading-snug text-ink-3">
+                This is HoldBot&apos;s mandate: it accepts anything inside it, asks you mid-call on real
+                tradeoffs, and never commits beyond it without your yes.
+              </p>
+            </div>
             <button
               onClick={startRecovery}
               disabled={stage === "starting"}
