@@ -117,3 +117,32 @@ export const CheckIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M20 6 9 17l-5-5" />
   </Base>
 );
+
+export const MicIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <path d="M12 19v3" />
+  </Base>
+);
+
+export const CompassIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z" />
+  </Base>
+);
+
+export const UserIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21v-1a7 7 0 0 1 16 0v1" />
+  </Base>
+);
+
+export const TagIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+    <circle cx="7.5" cy="7.5" r="0.5" fill="currentColor" />
+  </Base>
+);

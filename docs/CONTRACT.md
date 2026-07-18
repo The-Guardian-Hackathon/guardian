@@ -26,6 +26,7 @@ The backend (`backend/`, port **4000**) owns this data and serves it. The fronte
   - dinner: `restaurant`, `time_iso`, `party_size`, `confirmation_id`
   - transport: `type`, `pickup_iso`, `pickup_location`, `confirmation_id`
 - `price` is a number (USD) or null.
+- **Legs are dynamic (additive, non-breaking):** the four keys above are the core set, but `legs` may contain any keys — e.g. `flight_return` for a round trip, `food` instead of/alongside `dinner`, `activity` for an explore suggestion. Omit slots that aren't relevant (late-night arrival → no food slot). The frontend renders whatever keys exist; icon/kind is inferred from the key name. Draft legs should carry `details.reason` (a one-line "why Guardian drafted this") — the dashboard displays it.
 - `events` is **append-only**. Each entry:
 
 ```json

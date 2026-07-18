@@ -2,16 +2,29 @@
 
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
 import { StatusBadge } from "./StatusBadge";
-import { CarIcon, DinnerIcon, HotelIcon, PlaneIcon } from "./Icons";
+import { CarIcon, CompassIcon, DinnerIcon, HotelIcon, PlaneIcon, TagIcon } from "./Icons";
 import { fmtPrice, fmtTime } from "@/lib/format";
-import type { Leg, LegName } from "@/lib/types";
+import { legKind, type Leg, type LegKind, type LegName } from "@/lib/types";
 
-const META: Record<LegName, { Icon: ComponentType<SVGProps<SVGSVGElement>>; title: string }> = {
+const KIND_META: Record<LegKind, { Icon: ComponentType<SVGProps<SVGSVGElement>>; title: string }> = {
   flight: { Icon: PlaneIcon, title: "Flight" },
-  hotel: { Icon: HotelIcon, title: "Hotel" },
-  dinner: { Icon: DinnerIcon, title: "Dinner" },
+  hotel: { Icon: HotelIcon, title: "Stay" },
+  food: { Icon: DinnerIcon, title: "Food" },
   transport: { Icon: CarIcon, title: "Transport" },
+  activity: { Icon: CompassIcon, title: "Explore" },
+  other: { Icon: TagIcon, title: "Leg" },
 };
+
+// "flight_return" -> "Flight · return"
+function title(name: LegName, kind: LegKind): string {
+  const base = KIND_META[kind].title;
+  const qualifier = name
+    .toLowerCase()
+    .replace(/flight|hotel|stay|dinner|food|transport|car|pickup|activity|explore|tour/g, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return qualifier ? `${base} · ${qualifier}` : base;
+}
 
 const EDGE: Record<Leg["status"], string> = {
   draft: "var(--border-strong)",
@@ -20,8 +33,15 @@ const EDGE: Record<Leg["status"], string> = {
   disrupted: "var(--bad)",
 };
 
-function rows(name: LegName, d: Record<string, unknown>): [string, string][] {
-  switch (name) {
+const HIDDEN_KEYS = new Set(["reason", "confirmation_id", "delay"]);
+
+function prettyKey(k: string): string {
+  const s = k.replace(/_iso$/, "").replace(/_/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function rows(kind: LegKind, d: Record<string, unknown>): [string, string][] {
+  switch (kind) {
     case "flight":
       return [
         ["Route", d.origin && d.dest ? `${d.origin} → ${d.dest}` : "—"],
@@ -36,9 +56,9 @@ function rows(name: LegName, d: Record<string, unknown>): [string, string][] {
         ["Nights", String(d.nights ?? "—")],
         ["Perks", String(d.perks ?? "—")],
       ];
-    case "dinner":
+    case "food":
       return [
-        ["Restaurant", String(d.restaurant ?? "—")],
+        ["Restaurant", String(d.restaurant ?? d.name ?? "—")],
         ["Time", fmtTime(d.time_iso)],
         ["Party", d.party_size ? `${d.party_size} people` : "—"],
       ];
@@ -48,6 +68,12 @@ function rows(name: LegName, d: Record<string, unknown>): [string, string][] {
         ["Pickup", fmtTime(d.pickup_iso)],
         ["Location", String(d.pickup_location ?? "—")],
       ];
+    default:
+      // Unknown leg shape: render whatever details it has.
+      return Object.entries(d)
+        .filter(([k]) => !HIDDEN_KEYS.has(k))
+        .slice(0, 4)
+        .map(([k, v]) => [prettyKey(k), k.endsWith("_iso") ? fmtTime(v) : String(v)]);
   }
 }
 
@@ -65,13 +91,13 @@ export function LegCard({ name, leg }: { name: LegName; leg: Leg }) {
     }
   }, [snapshot]);
 
-  const { Icon, title } = META[name];
+  const kind = legKind(name);
+  const { Icon } = KIND_META[kind];
   const conf = leg.details.confirmation_id;
+  const reason = leg.status === "draft" ? leg.details.reason : undefined;
 
   return (
-    <div
-      className={`card relative overflow-hidden p-5 transition-shadow ${flash ? "flash" : ""}`}
-    >
+    <div className={`card relative overflow-hidden p-5 transition-shadow ${flash ? "flash" : ""}`}>
       <span
         className="absolute inset-y-0 left-0 w-[3px] transition-colors duration-500"
         style={{ background: EDGE[leg.status] }}
@@ -79,23 +105,27 @@ export function LegCard({ name, leg }: { name: LegName; leg: Leg }) {
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2.5 text-[15px] font-semibold text-ink">
           <Icon className="text-[17px] text-ink-3" />
-          {title}
+          {title(name, kind)}
         </h2>
         <StatusBadge status={leg.status} />
       </div>
       <dl className="space-y-2">
-        {rows(name, leg.details).map(([k, v]) => (
+        {rows(kind, leg.details).map(([k, v]) => (
           <div key={k} className="flex items-baseline justify-between gap-3 text-sm">
             <dt className="shrink-0 text-ink-3">{k}</dt>
             <dd className="text-right font-medium text-ink">{v}</dd>
           </div>
         ))}
       </dl>
+      {typeof reason === "string" && (
+        <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] leading-snug text-ink-2">
+          <span className="microlabel mr-1.5">Why</span>
+          {reason}
+        </p>
+      )}
       <div className="mt-4 flex items-baseline justify-between border-t border-line pt-3">
-        <span className="font-mono text-xs text-ink-3">{conf ? String(conf) : " "}</span>
-        <span className="text-base font-semibold tracking-tight text-ink">
-          {fmtPrice(leg.price)}
-        </span>
+        <span className="font-mono text-xs text-ink-3">{conf ? String(conf) : " "}</span>
+        <span className="text-base font-semibold tracking-tight text-ink">{fmtPrice(leg.price)}</span>
       </div>
     </div>
   );

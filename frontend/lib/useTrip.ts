@@ -173,5 +173,22 @@ export function useTrip(tripId: string) {
     [tripId, runScript],
   );
 
-  return { trip, error, startBid, disrupt, usingFixtures: USE_FIXTURES };
+  // Voice/interaction layer writes into the same activity stream.
+  const appendEvent = useCallback(
+    async (phase: Phase, message: string) => {
+      const event = { timestamp: new Date().toISOString(), phase, message };
+      if (USE_FIXTURES) {
+        setTrip((t) => (t ? { ...t, events: [...t.events, event] } : t));
+        return;
+      }
+      await fetch(`${BACKEND}/trip/${tripId}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(event),
+      });
+    },
+    [tripId],
+  );
+
+  return { trip, error, startBid, disrupt, appendEvent, usingFixtures: USE_FIXTURES };
 }

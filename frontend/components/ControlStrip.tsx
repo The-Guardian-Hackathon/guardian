@@ -7,10 +7,12 @@ export function ControlStrip({
   onBid,
   onDisrupt,
   usingFixtures,
+  bidDisabled = false,
 }: {
   onBid: () => void;
   onDisrupt: () => void;
   usingFixtures: boolean;
+  bidDisabled?: boolean;
 }) {
   const [bidFired, setBidFired] = useState(false);
   const [disruptFired, setDisruptFired] = useState(false);
@@ -23,7 +25,7 @@ export function ControlStrip({
             setBidFired(true);
             onBid();
           }}
-          disabled={bidFired}
+          disabled={bidFired || bidDisabled}
           className="flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-35 dark:text-[#101013]"
           style={{ color: "var(--surface)" }}
         >

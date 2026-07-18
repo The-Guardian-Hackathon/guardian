@@ -1,18 +1,21 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
+import { AskGuardian } from "@/components/AskGuardian";
 import { ControlStrip } from "@/components/ControlStrip";
 import { EventFeed } from "@/components/EventFeed";
 import { LegCard } from "@/components/LegCard";
 import { LiveCallIndicator } from "@/components/LiveCallIndicator";
+import { ProfilePopover } from "@/components/ProfilePopover";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CheckIcon, ShieldIcon } from "@/components/Icons";
 import { useTrip } from "@/lib/useTrip";
-import { LEG_ORDER } from "@/lib/types";
+import { sortLegs } from "@/lib/types";
 
 export default function TripDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { trip, error, startBid, disrupt, usingFixtures } = useTrip(id);
+  const { trip, error, startBid, disrupt, appendEvent, usingFixtures } = useTrip(id);
+  const [bidStarted, setBidStarted] = useState(false);
 
   const recovered = trip?.events.some(
     (e) => e.phase === "recover" && /recovery complete|new day/i.test(e.message),
@@ -29,6 +32,14 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
       </main>
     );
   }
+
+  const legs = sortLegs(trip.legs);
+  const hotelIsDraft = trip.legs.hotel?.status === "draft";
+
+  const beginBid = () => {
+    setBidStarted(true);
+    startBid("hotel");
+  };
 
   return (
     <main className="min-h-screen bg-bg px-6 py-5">
@@ -52,6 +63,7 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
                 Backend unreachable
               </span>
             )}
+            <ProfilePopover />
             <ThemeToggle />
           </div>
         </header>
@@ -67,17 +79,23 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
         )}
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="grid grid-cols-1 content-start gap-4 sm:grid-cols-2 lg:col-span-2">
-            {LEG_ORDER.map((name) => (
-              <LegCard key={name} name={name} leg={trip.legs[name]} />
-            ))}
-            <div className="sm:col-span-2">
-              <ControlStrip
-                onBid={() => startBid("hotel")}
-                onDisrupt={() => disrupt("flight", "delayed", 120)}
-                usingFixtures={usingFixtures}
-              />
+          <div className="flex flex-col gap-4 lg:col-span-2">
+            <AskGuardian
+              active={hotelIsDraft && !bidStarted}
+              onConfirmed={beginBid}
+              log={(m) => appendEvent("listen", m)}
+            />
+            <div className="grid grid-cols-1 content-start gap-4 sm:grid-cols-2">
+              {legs.map(([name, leg]) => (
+                <LegCard key={name} name={name} leg={leg} />
+              ))}
             </div>
+            <ControlStrip
+              onBid={beginBid}
+              onDisrupt={() => disrupt("flight", "delayed", 120)}
+              usingFixtures={usingFixtures}
+              bidDisabled={bidStarted}
+            />
           </div>
           <div className="min-h-[420px] lg:h-[calc(100vh-120px)]">
             <EventFeed events={trip.events} />
